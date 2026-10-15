@@ -1,28 +1,379 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Shiny App</title>
-    <script
-      src="./shinylive/load-shinylive-sw.js"
-      type="module"
-    ></script>
-    <script type="module">
-      import { runExportedApp } from "./shinylive/shinylive.js";
-      runExportedApp({
-        id: "root",
-        appEngine: "r",
-        relPath: "",
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cycle Calendar</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500&family=Inter:wght@400;500;600&display=swap">
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body {
+      height: 100%; margin: 0; padding: 0; overflow: hidden;
+      font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+      background: #FBF7F3;
+      color: #3D3535;
+    }
+
+    /* Ambient drift behind the gate */
+    body::before, body::after {
+      content: '';
+      position: fixed;
+      width: 60vw; height: 60vw;
+      border-radius: 50%;
+      filter: blur(60px);
+      pointer-events: none;
+      z-index: 0;
+    }
+    body::before {
+      top: -25vw; left: -20vw;
+      background: radial-gradient(circle, rgba(201,138,138,0.20), transparent 70%);
+      animation: drift 22s ease-in-out infinite alternate;
+    }
+    body::after {
+      bottom: -25vw; right: -20vw;
+      background: radial-gradient(circle, rgba(159,188,154,0.18), transparent 70%);
+      animation: drift 28s ease-in-out infinite alternate-reverse;
+    }
+    @keyframes drift {
+      0%   { transform: translate(0, 0) scale(1); }
+      100% { transform: translate(6%, 4%) scale(1.2); }
+    }
+
+    /* Password gate */
+    #gate {
+      position: fixed; inset: 0; display: flex;
+      align-items: center; justify-content: center;
+      z-index: 99999;
+    }
+    #gate .card {
+      position: relative;
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      padding: 44px 46px;
+      border-radius: 22px;
+      box-shadow: 0 24px 80px rgba(120, 90, 80, 0.14),
+                  0 0 0 1px rgba(201, 138, 138, 0.08);
+      text-align: center;
+      max-width: 400px; width: 90%;
+      animation: gateEnter 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    @keyframes gateEnter {
+      from { opacity: 0; transform: translateY(12px) scale(0.98); }
+      to   { opacity: 1; transform: translateY(0)    scale(1); }
+    }
+    #gate h1 {
+      margin: 0 0 10px;
+      font-family: 'Fraunces', Georgia, serif;
+      font-weight: 500;
+      font-size: 26px;
+      letter-spacing: -0.01em;
+      color: #3D3535;
+    }
+    #gate h1::before {
+      content: '';
+      display: block;
+      width: 44px; height: 44px;
+      margin: 0 auto 18px;
+      background: radial-gradient(circle at 40% 40%,
+                  #E7BFC0 0%, #C98A8A 60%, #A96666 100%);
+      border-radius: 50%;
+      box-shadow: 0 6px 20px rgba(201,138,138,0.30);
+      animation: gateLogoBreathe 5s ease-in-out infinite;
+    }
+    @keyframes gateLogoBreathe {
+      0%, 100% { transform: scale(1); }
+      50%      { transform: scale(1.06); }
+    }
+    #gate p {
+      margin: 0 0 26px;
+      color: #80736E;
+      font-size: 13.5px;
+      letter-spacing: 0.01em;
+    }
+    #gate input {
+      width: 100%; padding: 13px 16px; font-size: 15px;
+      font-family: 'Inter', sans-serif;
+      border: 1px solid rgba(201,138,138,0.15);
+      border-radius: 12px; outline: none;
+      background: rgba(246, 241, 235, 0.8);
+      color: #3D3535;
+      transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+      text-align: center;
+      letter-spacing: 0.08em;
+    }
+    #gate input:focus {
+      border-color: #C98A8A;
+      background: #ffffff;
+      box-shadow: 0 0 0 5px rgba(201,138,138,0.10);
+    }
+    #gate button {
+      margin-top: 16px; width: 100%; padding: 13px;
+      background: linear-gradient(135deg, #D4A0A0 0%, #C48A8A 100%);
+      color: #ffffff; border: none;
+      border-radius: 12px; font-size: 15px; font-weight: 500;
+      font-family: 'Inter', sans-serif;
+      letter-spacing: 0.02em;
+      cursor: pointer;
+      box-shadow: 0 6px 18px rgba(196,138,138,0.24);
+      transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    #gate button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 26px rgba(196,138,138,0.32);
+    }
+    #gate button:active { transform: translateY(0); }
+    #gate .err {
+      color: #B85C5C; font-size: 13px; margin-top: 12px;
+      min-height: 18px; letter-spacing: 0.01em;
+    }
+
+    /* Mount point */
+    #root {
+      position: fixed; inset: 0;
+      width: 100vw; height: 100vh;
+      display: none; overflow: hidden; z-index: 1;
+    }
+    #root.visible { display: block; }
+
+    #root iframe {
+      position: fixed !important;
+      top: 0 !important; left: 0 !important;
+      width: 100vw !important; height: 100vh !important;
+      border: 0 !important; margin: 0 !important; padding: 0 !important;
+      z-index: 999 !important;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="gate">
+    <div class="card">
+      <h1>Cycle Calendar</h1>
+      <p>Enter your password to continue</p>
+      <input type="password" id="pw" placeholder="••••••••"
+             autocomplete="current-password" autofocus />
+      <button id="go">Unlock</button>
+      <div class="err" id="err"></div>
+    </div>
+  </div>
+
+  <div id="root"></div>
+
+  <script src="./shinylive/load-shinylive-sw.js" type="module"></script>
+
+  <script type="module">
+    // =================================================================
+    // ⚠️ CHANGE THIS PASSWORD ⚠️
+    const PASSWORD = "sunflower@2026";
+    // =================================================================
+
+    const gateEl = document.getElementById("gate");
+    const rootEl = document.getElementById("root");
+    const pwBox  = document.getElementById("pw");
+    const errBox = document.getElementById("err");
+    const goBtn  = document.getElementById("go");
+
+    let appBooted = false;
+
+    // ---- Force iframe to full viewport ----
+    function sizeIframe(iframe) {
+      Object.assign(iframe.style, {
+        position: "fixed", top: "0", left: "0",
+        width: "100vw", height: "100vh",
+        border: "0", margin: "0", padding: "0", zIndex: "999"
       });
-    </script>
-    <link rel="stylesheet" href="./shinylive/style-resets.css" />
-    <link rel="stylesheet" href="./shinylive/shinylive.css" />
-    
-  </head>
-  <body>
-    
-    <div style="height: 100vh; width: 100vw" id="root"></div>
-    
-  </body>
+      iframe.setAttribute("width",  window.innerWidth);
+      iframe.setAttribute("height", window.innerHeight);
+    }
+
+    // ---- Layout CSS injected into the iframe ----
+    const INNER_CSS_LAYOUT = `
+      html, body {
+        height: 100% !important; margin: 0 !important; padding: 0 !important;
+        background: #FBF7F3 !important;
+      }
+      .container-fluid {
+        height: 100vh !important;
+        display: flex !important;
+        flex-direction: column !important;
+        padding: 20px 28px !important;
+      }
+      .container-fluid > .row {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        display: flex !important;
+      }
+      .container-fluid > .row > [class*='col-'] {
+        height: 100% !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+      }
+      .tabbable, .tab-content, .tab-pane { height: 100% !important; }
+      .tab-content { overflow-y: auto !important; padding-top: 4px !important; }
+    `;
+
+    // ---- Animation CSS injected into the iframe ----
+    const INNER_CSS_ANIM = `
+      /* Line-drawing animation for plotly line traces */
+      .js-plotly-plot .scatterlayer .trace .js-line {
+        stroke-dasharray: 4000;
+        stroke-dashoffset: 4000;
+        animation: drawLine 2.0s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+      }
+      @keyframes drawLine {
+        to { stroke-dashoffset: 0; }
+      }
+    `;
+
+    // ---- Counter + observer JS injected into the iframe ----
+    const INNER_JS = `
+      (function () {
+        if (window.__counterInstalled) return;
+        window.__counterInstalled = true;
+
+        function animateCounter(el) {
+          const target = el.textContent.trim();
+          const m = target.match(/^(\\d+(?:\\.\\d+)?)(.*)$/);
+          if (!m) return;
+          const end   = parseFloat(m[1]);
+          const tail  = m[2] || "";
+          const dur   = 750;
+          const start = performance.now();
+          function step(now) {
+            const t = Math.min((now - start) / dur, 1);
+            const eased = 1 - Math.pow(1 - t, 3);
+            const v = Math.round(end * eased);
+            el.textContent = v + tail;
+            if (t < 1) requestAnimationFrame(step);
+          }
+          requestAnimationFrame(step);
+        }
+
+        const io = new IntersectionObserver((entries) => {
+          entries.forEach(e => {
+            if (e.isIntersecting && !e.target.dataset.animated) {
+              e.target.dataset.animated = "1";
+              animateCounter(e.target);
+            }
+          });
+        }, { threshold: 0.4 });
+
+        function scan() {
+          document.querySelectorAll(".stat-val").forEach(el => {
+            if (!el.dataset.observed) {
+              el.dataset.observed = "1";
+              io.observe(el);
+            }
+          });
+        }
+        scan();
+        setInterval(scan, 500);
+      })();
+    `;
+
+    function injectIframeAssets(iframe) {
+      try {
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+        if (!doc || !doc.head) return false;
+
+        if (!doc.getElementById("__layout_css")) {
+          const s = doc.createElement("style");
+          s.id = "__layout_css";
+          s.textContent = INNER_CSS_LAYOUT;
+          doc.head.appendChild(s);
+        }
+        if (!doc.getElementById("__anim_css")) {
+          const s = doc.createElement("style");
+          s.id = "__anim_css";
+          s.textContent = INNER_CSS_ANIM;
+          doc.head.appendChild(s);
+        }
+        if (doc.body && !doc.getElementById("__counter_js")) {
+          const s = doc.createElement("script");
+          s.id = "__counter_js";
+          s.textContent = INNER_JS;
+          doc.body.appendChild(s);
+        }
+        return true;
+      } catch (err) {
+        console.warn("Cannot inject into iframe:", err);
+        return false;
+      }
+    }
+
+    function watchIframe() {
+      const tick = () => {
+        const iframe = rootEl.querySelector("iframe");
+        if (!iframe) return;
+        sizeIframe(iframe);
+        injectIframeAssets(iframe);
+      };
+      tick();
+      const id = setInterval(tick, 100);
+      setTimeout(() => clearInterval(id), 15000);
+    }
+
+    async function bootApp() {
+      if (appBooted) return;
+      appBooted = true;
+
+      gateEl.style.transition = "opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1)";
+      gateEl.style.opacity = "0";
+      setTimeout(() => { gateEl.style.display = "none"; }, 400);
+
+      rootEl.classList.add("visible");
+      rootEl.style.opacity = "0";
+      rootEl.style.transition = "opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1)";
+      setTimeout(() => { rootEl.style.opacity = "1"; }, 100);
+
+      const obs = new MutationObserver(() => {
+        const iframe = rootEl.querySelector("iframe");
+        if (iframe) { sizeIframe(iframe); injectIframeAssets(iframe); }
+      });
+      obs.observe(rootEl, { childList: true, subtree: true });
+
+      const { runExportedApp } = await import("./shinylive/shinylive.js");
+      runExportedApp({ id: "root", appEngine: "r", relPath: "/" });
+
+      watchIframe();
+
+      const nudge = () => {
+        const iframe = rootEl.querySelector("iframe");
+        if (iframe) { sizeIframe(iframe); injectIframeAssets(iframe); }
+        window.dispatchEvent(new Event("resize"));
+      };
+      [300, 800, 1500, 3000, 6000].forEach(ms => setTimeout(nudge, ms));
+    }
+
+    if (sessionStorage.getItem("cycle_unlocked") === "yes") bootApp();
+
+    function tryUnlock() {
+      if (pwBox.value === PASSWORD) {
+        sessionStorage.setItem("cycle_unlocked", "yes");
+        errBox.textContent = "";
+        bootApp();
+      } else {
+        errBox.textContent = "Incorrect password. Please try again.";
+        pwBox.value = "";
+        pwBox.focus();
+        pwBox.animate(
+          [{ transform: "translateX(0)" },
+           { transform: "translateX(-6px)" },
+           { transform: "translateX(6px)" },
+           { transform: "translateX(0)" }],
+          { duration: 260, easing: "ease-in-out" }
+        );
+      }
+    }
+    goBtn.addEventListener("click", tryUnlock);
+    pwBox.addEventListener("keydown", e => { if (e.key === "Enter") tryUnlock(); });
+  </script>
+
+</body>
 </html>
